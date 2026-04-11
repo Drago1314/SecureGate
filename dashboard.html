@@ -1,0 +1,1296 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SecureGate — Apartment Visitor Security</title>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;500;600;700;800&family=JetBrains+Mono:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #080c10;
+    --surface: #0d1117;
+    --surface2: #161b22;
+    --border: #21262d;
+    --accent: #00ff88;
+    --accent2: #ff4444;
+    --accent3: #ffaa00;
+    --text: #e6edf3;
+    --text-muted: #7d8590;
+    --verified: #00ff88;
+    --fake: #ff4444;
+    --unknown: #ffaa00;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Syne', sans-serif;
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  /* GRID BACKGROUND */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image: 
+      linear-gradient(rgba(0,255,136,0.03) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(0,255,136,0.03) 1px, transparent 1px);
+    background-size: 40px 40px;
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  /* SCANLINE OVERLAY */
+  body::after {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background: repeating-linear-gradient(
+      0deg,
+      transparent,
+      transparent 2px,
+      rgba(0,0,0,0.08) 2px,
+      rgba(0,0,0,0.08) 4px
+    );
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  /* ─── HEADER ─── */
+  header {
+    position: sticky;
+    top: 0;
+    z-index: 100;
+    background: rgba(8,12,16,0.92);
+    backdrop-filter: blur(20px);
+    border-bottom: 1px solid var(--border);
+    padding: 0 2rem;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    height: 64px;
+  }
+
+  .logo {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .logo-icon {
+    width: 36px;
+    height: 36px;
+    background: var(--accent);
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 18px;
+    animation: pulse-glow 3s ease-in-out infinite;
+  }
+
+  @keyframes pulse-glow {
+    0%, 100% { box-shadow: 0 0 12px rgba(0,255,136,0.4); }
+    50% { box-shadow: 0 0 24px rgba(0,255,136,0.8); }
+  }
+
+  .logo-text {
+    font-size: 1.2rem;
+    font-weight: 800;
+    letter-spacing: -0.5px;
+  }
+
+  .logo-text span { color: var(--accent); }
+
+  .header-right {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+  }
+
+  .status-dot {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.75rem;
+    color: var(--accent);
+  }
+
+  .status-dot::before {
+    content: '';
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--accent);
+    animation: blink 2s ease-in-out infinite;
+  }
+
+  @keyframes blink {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.3; }
+  }
+
+  .api-url {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.7rem;
+    color: var(--text-muted);
+    background: var(--surface2);
+    padding: 4px 10px;
+    border-radius: 4px;
+    border: 1px solid var(--border);
+  }
+
+  /* ─── NAV TABS ─── */
+  nav {
+    position: relative;
+    z-index: 1;
+    display: flex;
+    gap: 0;
+    padding: 1rem 2rem 0;
+    border-bottom: 1px solid var(--border);
+    overflow-x: auto;
+  }
+
+  nav::-webkit-scrollbar { height: 2px; }
+  nav::-webkit-scrollbar-thumb { background: var(--accent); }
+
+  .tab {
+    padding: 10px 20px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.8rem;
+    font-weight: 500;
+    color: var(--text-muted);
+    border: none;
+    background: none;
+    cursor: pointer;
+    border-bottom: 2px solid transparent;
+    white-space: nowrap;
+    transition: all 0.2s;
+    letter-spacing: 0.5px;
+  }
+
+  .tab:hover { color: var(--text); }
+
+  .tab.active {
+    color: var(--accent);
+    border-bottom-color: var(--accent);
+  }
+
+  /* ─── MAIN CONTENT ─── */
+  main {
+    position: relative;
+    z-index: 1;
+    padding: 2rem;
+    max-width: 1400px;
+    margin: 0 auto;
+  }
+
+  .page { display: none; }
+  .page.active { display: block; animation: fadeIn 0.3s ease; }
+
+  @keyframes fadeIn {
+    from { opacity: 0; transform: translateY(8px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  /* ─── STATS GRID ─── */
+  .stats-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 1rem;
+    margin-bottom: 2rem;
+  }
+
+  .stat-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 1.5rem;
+    position: relative;
+    overflow: hidden;
+    transition: border-color 0.2s;
+  }
+
+  .stat-card:hover { border-color: var(--accent); }
+
+  .stat-card::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 2px;
+  }
+
+  .stat-card.total::before { background: linear-gradient(90deg, var(--accent), transparent); }
+  .stat-card.verified::before { background: linear-gradient(90deg, var(--verified), transparent); }
+  .stat-card.fake::before { background: linear-gradient(90deg, var(--fake), transparent); }
+  .stat-card.unknown::before { background: linear-gradient(90deg, var(--unknown), transparent); }
+
+  .stat-label {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.7rem;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    margin-bottom: 0.75rem;
+  }
+
+  .stat-value {
+    font-size: 2.5rem;
+    font-weight: 800;
+    line-height: 1;
+    margin-bottom: 0.25rem;
+  }
+
+  .stat-card.total .stat-value { color: var(--text); }
+  .stat-card.verified .stat-value { color: var(--verified); }
+  .stat-card.fake .stat-value { color: var(--fake); }
+  .stat-card.unknown .stat-value { color: var(--unknown); }
+
+  .stat-sub {
+    font-size: 0.75rem;
+    color: var(--text-muted);
+  }
+
+  /* ─── SECTION HEADER ─── */
+  .section-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 1rem;
+  }
+
+  .section-title {
+    font-size: 1rem;
+    font-weight: 700;
+    letter-spacing: -0.3px;
+  }
+
+  .section-title span {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.7rem;
+    font-weight: 400;
+    color: var(--text-muted);
+    margin-left: 8px;
+  }
+
+  /* ─── TABLE ─── */
+  .table-wrap {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    overflow: hidden;
+  }
+
+  table {
+    width: 100%;
+    border-collapse: collapse;
+  }
+
+  thead {
+    background: var(--surface2);
+    border-bottom: 1px solid var(--border);
+  }
+
+  th {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.7rem;
+    font-weight: 500;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    padding: 12px 16px;
+    text-align: left;
+  }
+
+  td {
+    padding: 12px 16px;
+    font-size: 0.875rem;
+    border-bottom: 1px solid rgba(33,38,45,0.5);
+    vertical-align: middle;
+  }
+
+  tr:last-child td { border-bottom: none; }
+  tr:hover td { background: rgba(255,255,255,0.02); }
+
+  .badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 3px 10px;
+    border-radius: 20px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.7rem;
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+
+  .badge::before { content: '●'; font-size: 8px; }
+
+  .badge-verified { background: rgba(0,255,136,0.1); color: var(--verified); border: 1px solid rgba(0,255,136,0.2); }
+  .badge-fake { background: rgba(255,68,68,0.1); color: var(--fake); border: 1px solid rgba(255,68,68,0.2); }
+  .badge-unknown { background: rgba(255,170,0,0.1); color: var(--unknown); border: 1px solid rgba(255,170,0,0.2); }
+  .badge-unlocked { background: rgba(0,255,136,0.1); color: var(--verified); border: 1px solid rgba(0,255,136,0.2); }
+  .badge-denied { background: rgba(255,68,68,0.1); color: var(--fake); border: 1px solid rgba(255,68,68,0.2); }
+  .badge-alerted { background: rgba(255,170,0,0.1); color: var(--unknown); border: 1px solid rgba(255,170,0,0.2); }
+
+  .ts {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.75rem;
+    color: var(--text-muted);
+  }
+
+  /* ─── FORMS ─── */
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 1.5rem;
+    margin-bottom: 1.5rem;
+  }
+
+  .card-title {
+    font-size: 0.9rem;
+    font-weight: 700;
+    margin-bottom: 1.25rem;
+    padding-bottom: 1rem;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .form-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 1rem;
+  }
+
+  .form-group { display: flex; flex-direction: column; gap: 6px; }
+
+  label {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.7rem;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+
+  input, select {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 10px 12px;
+    color: var(--text);
+    font-family: 'Syne', sans-serif;
+    font-size: 0.875rem;
+    transition: border-color 0.2s;
+    outline: none;
+    width: 100%;
+  }
+
+  input:focus, select:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(0,255,136,0.1); }
+  select option { background: var(--surface2); }
+
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 10px 20px;
+    border-radius: 8px;
+    font-family: 'Syne', sans-serif;
+    font-size: 0.875rem;
+    font-weight: 600;
+    cursor: pointer;
+    border: none;
+    transition: all 0.2s;
+    white-space: nowrap;
+  }
+
+  .btn-primary {
+    background: var(--accent);
+    color: #000;
+  }
+
+  .btn-primary:hover { 
+    background: #00cc6a; 
+    box-shadow: 0 0 20px rgba(0,255,136,0.3);
+  }
+
+  .btn-danger {
+    background: transparent;
+    color: var(--fake);
+    border: 1px solid rgba(255,68,68,0.3);
+  }
+
+  .btn-danger:hover { background: rgba(255,68,68,0.1); }
+
+  .btn-ghost {
+    background: transparent;
+    color: var(--text-muted);
+    border: 1px solid var(--border);
+  }
+
+  .btn-ghost:hover { color: var(--text); border-color: var(--text-muted); }
+
+  .form-row {
+    display: flex;
+    gap: 1rem;
+    align-items: flex-end;
+    flex-wrap: wrap;
+  }
+
+  /* ─── ALERTS ─── */
+  .alert-item {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-left: 3px solid var(--fake);
+    border-radius: 8px;
+    padding: 1rem 1.25rem;
+    margin-bottom: 0.75rem;
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 1rem;
+    transition: opacity 0.3s;
+  }
+
+  .alert-item.read { opacity: 0.5; border-left-color: var(--border); }
+  .alert-item.info { border-left-color: var(--unknown); }
+
+  .alert-msg { font-size: 0.875rem; line-height: 1.5; }
+  .alert-time { font-family: 'JetBrains Mono', monospace; font-size: 0.7rem; color: var(--text-muted); margin-top: 4px; }
+
+  /* ─── EMPTY STATE ─── */
+  .empty-state {
+    text-align: center;
+    padding: 3rem;
+    color: var(--text-muted);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.85rem;
+  }
+
+  .empty-state .icon { font-size: 2.5rem; margin-bottom: 0.75rem; }
+
+  /* ─── TOAST ─── */
+  #toast {
+    position: fixed;
+    bottom: 2rem;
+    right: 2rem;
+    z-index: 9999;
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+
+  .toast-item {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 12px 16px;
+    font-size: 0.85rem;
+    min-width: 260px;
+    animation: slideIn 0.3s ease;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .toast-item.success { border-left: 3px solid var(--verified); }
+  .toast-item.error { border-left: 3px solid var(--fake); }
+
+  @keyframes slideIn {
+    from { opacity: 0; transform: translateX(20px); }
+    to { opacity: 1; transform: translateX(0); }
+  }
+
+  /* ─── REFRESH BTN ─── */
+  .refresh-btn {
+    background: transparent;
+    border: 1px solid var(--border);
+    color: var(--text-muted);
+    padding: 6px 12px;
+    border-radius: 6px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.7rem;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+
+  .refresh-btn:hover { border-color: var(--accent); color: var(--accent); }
+
+  .spinning { animation: spin 0.8s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* ─── SETTINGS ─── */
+  .setting-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 1rem 0;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .setting-row:last-child { border-bottom: none; }
+  .setting-label { font-size: 0.875rem; font-weight: 600; }
+  .setting-desc { font-size: 0.78rem; color: var(--text-muted); margin-top: 2px; }
+
+  /* ─── LOADING ─── */
+  .loading-row td {
+    text-align: center;
+    color: var(--text-muted);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.8rem;
+    padding: 2rem;
+  }
+
+  /* ─── MOBILE ─── */
+  @media (max-width: 600px) {
+    main { padding: 1rem; }
+    nav { padding: 0.75rem 1rem 0; }
+    header { padding: 0 1rem; }
+    .api-url { display: none; }
+    .stats-grid { grid-template-columns: repeat(2, 1fr); }
+  }
+
+  /* Chart bar */
+  .mini-bar {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 6px;
+  }
+
+  .mini-bar-label { 
+    font-family: 'JetBrains Mono', monospace; 
+    font-size: 0.7rem; 
+    color: var(--text-muted); 
+    width: 60px; 
+    text-align: right; 
+  }
+
+  .mini-bar-track {
+    flex: 1;
+    height: 6px;
+    background: var(--border);
+    border-radius: 3px;
+    overflow: hidden;
+  }
+
+  .mini-bar-fill {
+    height: 100%;
+    border-radius: 3px;
+    transition: width 1s ease;
+  }
+
+  .mini-bar-val {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.7rem;
+    color: var(--text-muted);
+    width: 30px;
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">
+    <div class="logo-icon">🔐</div>
+    <div class="logo-text">Secure<span>Gate</span></div>
+  </div>
+  <div class="header-right">
+    <div class="status-dot" id="connectionStatus">Connecting...</div>
+    <div class="api-url" id="apiUrlDisplay">localhost:8000</div>
+  </div>
+</header>
+
+<nav>
+  <button class="tab active" onclick="switchTab('dashboard', this)">📊 Dashboard</button>
+  <button class="tab" onclick="switchTab('logs', this)">📋 Entry Logs</button>
+  <button class="tab" onclick="switchTab('residents', this)">🏠 Residents</button>
+  <button class="tab" onclick="switchTab('visitors', this)">👤 Visitors</button>
+  <button class="tab" onclick="switchTab('alerts', this)">🚨 Alerts</button>
+  <button class="tab" onclick="switchTab('simulate', this)">🧪 Simulate</button>
+  <button class="tab" onclick="switchTab('settings', this)">⚙️ Settings</button>
+</nav>
+
+<main>
+
+  <!-- ─── DASHBOARD ─── -->
+  <div class="page active" id="page-dashboard">
+    <div class="stats-grid" id="statsGrid">
+      <div class="stat-card total">
+        <div class="stat-label">Total Entries</div>
+        <div class="stat-value" id="statTotal">—</div>
+        <div class="stat-sub">All time</div>
+      </div>
+      <div class="stat-card verified">
+        <div class="stat-label">Verified</div>
+        <div class="stat-value" id="statVerified">—</div>
+        <div class="stat-sub">Access granted</div>
+      </div>
+      <div class="stat-card fake">
+        <div class="stat-label">Fake Attempts</div>
+        <div class="stat-value" id="statFake">—</div>
+        <div class="stat-sub">Blocked & alerted</div>
+      </div>
+      <div class="stat-card unknown">
+        <div class="stat-label">Unknown</div>
+        <div class="stat-value" id="statUnknown">—</div>
+        <div class="stat-sub">Under review</div>
+      </div>
+    </div>
+
+    <div style="display:grid; grid-template-columns: 1fr 1fr; gap: 1.5rem;">
+      <div class="card">
+        <div class="card-title">📈 Distribution</div>
+        <div id="chartArea">
+          <div class="empty-state"><div class="icon">📊</div>Loading stats...</div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-title">🕐 Recent Activity</div>
+        <div id="recentActivity">
+          <div class="empty-state"><div class="icon">⏳</div>Loading...</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ─── ENTRY LOGS ─── -->
+  <div class="page" id="page-logs">
+    <div class="section-header">
+      <div class="section-title">Entry Logs <span>last 50 entries</span></div>
+      <button class="refresh-btn" onclick="loadLogs()">↻ Refresh</button>
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>#</th>
+            <th>Timestamp</th>
+            <th>Visitor ID</th>
+            <th>Resident ID</th>
+            <th>Status</th>
+            <th>Spoof Type</th>
+            <th>Action</th>
+          </tr>
+        </thead>
+        <tbody id="logsBody">
+          <tr class="loading-row"><td colspan="7">Loading entries...</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- ─── RESIDENTS ─── -->
+  <div class="page" id="page-residents">
+    <div class="card">
+      <div class="card-title">➕ Add Resident</div>
+      <div class="form-grid">
+        <div class="form-group">
+          <label>Flat Number *</label>
+          <input type="text" id="r_flat" placeholder="e.g. A-201">
+        </div>
+        <div class="form-group">
+          <label>Name *</label>
+          <input type="text" id="r_name" placeholder="Full name">
+        </div>
+        <div class="form-group">
+          <label>Phone *</label>
+          <input type="text" id="r_phone" placeholder="+91 XXXXX XXXXX">
+        </div>
+        <div class="form-group">
+          <label>Email</label>
+          <input type="email" id="r_email" placeholder="optional">
+        </div>
+      </div>
+      <div style="margin-top: 1rem;">
+        <button class="btn btn-primary" onclick="addResident()">Add Resident</button>
+      </div>
+    </div>
+
+    <div class="section-header">
+      <div class="section-title">All Residents</div>
+      <button class="refresh-btn" onclick="loadResidents()">↻ Refresh</button>
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>ID</th>
+            <th>Flat</th>
+            <th>Name</th>
+            <th>Phone</th>
+            <th>Email</th>
+            <th>Registered</th>
+          </tr>
+        </thead>
+        <tbody id="residentsBody">
+          <tr class="loading-row"><td colspan="6">Loading residents...</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- ─── VISITORS ─── -->
+  <div class="page" id="page-visitors">
+    <div class="card">
+      <div class="card-title">➕ Register Visitor</div>
+      <div class="form-grid">
+        <div class="form-group">
+          <label>Name *</label>
+          <input type="text" id="v_name" placeholder="Visitor's name">
+        </div>
+        <div class="form-group">
+          <label>Phone</label>
+          <input type="text" id="v_phone" placeholder="+91 XXXXX XXXXX">
+        </div>
+        <div class="form-group">
+          <label>Registered By (Resident ID)</label>
+          <input type="number" id="v_resident" placeholder="e.g. 1">
+        </div>
+      </div>
+      <div style="margin-top: 1rem;">
+        <button class="btn btn-primary" onclick="addVisitor()">Register Visitor</button>
+      </div>
+    </div>
+
+    <div class="section-header">
+      <div class="section-title">All Visitors</div>
+      <button class="refresh-btn" onclick="loadVisitors()">↻ Refresh</button>
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>ID</th>
+            <th>Name</th>
+            <th>Phone</th>
+            <th>Registered By</th>
+            <th>Photo</th>
+            <th>Registered At</th>
+          </tr>
+        </thead>
+        <tbody id="visitorsBody">
+          <tr class="loading-row"><td colspan="6">Loading visitors...</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- ─── ALERTS ─── -->
+  <div class="page" id="page-alerts">
+    <div class="card">
+      <div class="card-title">🔍 Fetch Alerts for Resident</div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>Resident ID</label>
+          <input type="number" id="alert_resident_id" placeholder="e.g. 1" style="width:200px">
+        </div>
+        <button class="btn btn-primary" onclick="loadAlerts()">Fetch Alerts</button>
+      </div>
+    </div>
+    <div id="alertsList">
+      <div class="empty-state"><div class="icon">🔔</div>Enter resident ID to see alerts</div>
+    </div>
+  </div>
+
+  <!-- ─── SIMULATE ─── -->
+  <div class="page" id="page-simulate">
+    <div class="card">
+      <div class="card-title">🧪 Simulate Entry Detection <span style="font-size:0.7rem; color:var(--text-muted); font-weight:400">— mimics what Mustafa's AI module sends</span></div>
+      <div class="form-grid">
+        <div class="form-group">
+          <label>Visitor ID (optional)</label>
+          <input type="number" id="sim_visitor" placeholder="Leave blank if unknown">
+        </div>
+        <div class="form-group">
+          <label>Resident ID (optional)</label>
+          <input type="number" id="sim_resident" placeholder="For alert routing">
+        </div>
+        <div class="form-group">
+          <label>Status *</label>
+          <select id="sim_status">
+            <option value="verified">✅ verified</option>
+            <option value="fake">❌ fake</option>
+            <option value="unknown">❓ unknown</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Spoof Type</label>
+          <select id="sim_spoof">
+            <option value="none">none</option>
+            <option value="photo">photo (printed)</option>
+            <option value="video">video replay</option>
+            <option value="mask">3D mask</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Snapshot Path (optional)</label>
+          <input type="text" id="sim_snapshot" placeholder="snapshots/frame_xyz.jpg">
+        </div>
+      </div>
+      <div style="margin-top:1.25rem; display:flex; gap:1rem; align-items:center;">
+        <button class="btn btn-primary" onclick="simulateEntry()">🚀 Send to /entry</button>
+        <button class="btn btn-ghost" onclick="quickTest()">⚡ Quick Test All 3</button>
+      </div>
+    </div>
+    <div id="sim_result"></div>
+  </div>
+
+  <!-- ─── SETTINGS ─── -->
+  <div class="page" id="page-settings">
+    <div class="card">
+      <div class="card-title">⚙️ Configuration</div>
+      <div class="setting-row">
+        <div>
+          <div class="setting-label">Backend API URL</div>
+          <div class="setting-desc">Your FastAPI server address (no trailing slash)</div>
+        </div>
+        <div style="display:flex; gap:8px; align-items:center;">
+          <input type="text" id="setting_api_url" style="width:240px; font-family:'JetBrains Mono',monospace; font-size:0.8rem;">
+          <button class="btn btn-primary" onclick="saveSettings()">Save</button>
+        </div>
+      </div>
+      <div class="setting-row">
+        <div>
+          <div class="setting-label">Test Connection</div>
+          <div class="setting-desc">Ping /stats endpoint to verify backend is live</div>
+        </div>
+        <button class="btn btn-ghost" onclick="testConnection()">Ping Backend</button>
+      </div>
+      <div class="setting-row">
+        <div>
+          <div class="setting-label">Swagger Docs</div>
+          <div class="setting-desc">Open FastAPI auto-generated API documentation</div>
+        </div>
+        <button class="btn btn-ghost" onclick="openSwagger()">Open /docs ↗</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">👥 Team</div>
+      <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap:1rem;">
+        <div style="background:var(--surface2); border:1px solid var(--border); border-radius:10px; padding:1rem; text-align:center;">
+          <div style="font-size:1.5rem; margin-bottom:6px;">🧠</div>
+          <div style="font-weight:700; margin-bottom:4px;">Mustafa</div>
+          <div style="font-size:0.75rem; color:var(--text-muted);">AI / Computer Vision</div>
+          <div style="font-size:0.7rem; color:var(--accent); margin-top:6px; font-family:'JetBrains Mono',monospace;">OpenCV · FaceNet</div>
+        </div>
+        <div style="background:var(--surface2); border:1px solid var(--border); border-radius:10px; padding:1rem; text-align:center;">
+          <div style="font-size:1.5rem; margin-bottom:6px;">⚙️</div>
+          <div style="font-weight:700; margin-bottom:4px;">Faazil</div>
+          <div style="font-size:0.75rem; color:var(--text-muted);">Backend + Database</div>
+          <div style="font-size:0.7rem; color:var(--accent); margin-top:6px; font-family:'JetBrains Mono',monospace;">FastAPI · SQLite</div>
+        </div>
+        <div style="background:var(--surface2); border:1px solid var(--border); border-radius:10px; padding:1rem; text-align:center;">
+          <div style="font-size:1.5rem; margin-bottom:6px;">🔌</div>
+          <div style="font-weight:700; margin-bottom:4px;">Shrushti</div>
+          <div style="font-size:0.75rem; color:var(--text-muted);">IoT / Hardware</div>
+          <div style="font-size:0.7rem; color:var(--accent); margin-top:6px; font-family:'JetBrains Mono',monospace;">Raspberry Pi · GPIO</div>
+        </div>
+        <div style="background:var(--surface2); border:1px solid var(--border); border-radius:10px; padding:1rem; text-align:center;">
+          <div style="font-size:1.5rem; margin-bottom:6px;">🎨</div>
+          <div style="font-weight:700; margin-bottom:4px;">Yasin</div>
+          <div style="font-size:0.75rem; color:var(--text-muted);">Frontend + Presentation</div>
+          <div style="font-size:0.7rem; color:var(--accent); margin-top:6px; font-family:'JetBrains Mono',monospace;">HTML · CSS · JS</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</main>
+
+<div id="toast"></div>
+
+<script>
+  // ─── CONFIG ───
+  let API = localStorage.getItem('sg_api_url') || 'http://localhost:8000';
+
+  function getAPI() { return API; }
+
+  // ─── INIT SETTINGS INPUT ───
+  document.getElementById('setting_api_url').value = API;
+  document.getElementById('apiUrlDisplay').textContent = API.replace('http://','').replace('https://','');
+
+  // ─── TAB SWITCHING ───
+  function switchTab(name, btn) {
+    document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+    document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+    document.getElementById('page-' + name).classList.add('active');
+    btn.classList.add('active');
+
+    // Lazy load
+    if (name === 'dashboard') { loadStats(); loadRecentActivity(); }
+    else if (name === 'logs') loadLogs();
+    else if (name === 'residents') loadResidents();
+    else if (name === 'visitors') loadVisitors();
+  }
+
+  // ─── TOAST ───
+  function toast(msg, type = 'success') {
+    const el = document.createElement('div');
+    el.className = `toast-item ${type}`;
+    el.textContent = (type === 'success' ? '✅ ' : '❌ ') + msg;
+    document.getElementById('toast').appendChild(el);
+    setTimeout(() => el.remove(), 4000);
+  }
+
+  // ─── API HELPER ───
+  async function api(path, opts = {}) {
+    try {
+      const res = await fetch(getAPI() + path, {
+        headers: { 'Content-Type': 'application/json' },
+        ...opts
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.detail || `HTTP ${res.status}`);
+      }
+      return await res.json();
+    } catch (e) {
+      throw e;
+    }
+  }
+
+  // ─── CONNECTION STATUS ───
+  async function checkConnection() {
+    try {
+      await api('/stats');
+      document.getElementById('connectionStatus').textContent = 'Backend Live';
+      document.getElementById('connectionStatus').style.color = 'var(--verified)';
+    } catch {
+      document.getElementById('connectionStatus').textContent = 'Offline';
+      document.getElementById('connectionStatus').style.color = 'var(--fake)';
+    }
+  }
+
+  // ─── STATS ───
+  async function loadStats() {
+    try {
+      const data = await api('/stats');
+      document.getElementById('statTotal').textContent = data.total_entries;
+      document.getElementById('statVerified').textContent = data.verified;
+      document.getElementById('statFake').textContent = data.fake_attempts;
+      document.getElementById('statUnknown').textContent = data.unknown;
+
+      // Chart
+      const total = data.total_entries || 1;
+      document.getElementById('chartArea').innerHTML = `
+        <div class="mini-bar">
+          <div class="mini-bar-label">Verified</div>
+          <div class="mini-bar-track"><div class="mini-bar-fill" style="width:${(data.verified/total*100)}%; background:var(--verified);"></div></div>
+          <div class="mini-bar-val">${data.verified}</div>
+        </div>
+        <div class="mini-bar">
+          <div class="mini-bar-label">Fake</div>
+          <div class="mini-bar-track"><div class="mini-bar-fill" style="width:${(data.fake_attempts/total*100)}%; background:var(--fake);"></div></div>
+          <div class="mini-bar-val">${data.fake_attempts}</div>
+        </div>
+        <div class="mini-bar">
+          <div class="mini-bar-label">Unknown</div>
+          <div class="mini-bar-track"><div class="mini-bar-fill" style="width:${(data.unknown/total*100)}%; background:var(--unknown);"></div></div>
+          <div class="mini-bar-val">${data.unknown}</div>
+        </div>
+        <div style="margin-top:1rem; font-family:'JetBrains Mono',monospace; font-size:0.7rem; color:var(--text-muted);">
+          Security Rate: <span style="color:var(--verified); font-weight:700;">${total > 0 ? Math.round(data.verified/total*100) : 0}%</span> verified
+        </div>
+      `;
+    } catch(e) {
+      toast('Could not load stats — is backend running?', 'error');
+    }
+  }
+
+  async function loadRecentActivity() {
+    try {
+      const logs = await api('/entry/logs?limit=5');
+      if (!logs.length) {
+        document.getElementById('recentActivity').innerHTML = '<div class="empty-state"><div class="icon">🕐</div>No entries yet</div>';
+        return;
+      }
+      document.getElementById('recentActivity').innerHTML = logs.map(l => `
+        <div style="display:flex; justify-content:space-between; align-items:center; padding:8px 0; border-bottom:1px solid var(--border);">
+          <div>
+            <span class="badge badge-${l.status}">${l.status}</span>
+            <span style="margin-left:8px; font-size:0.8rem; color:var(--text-muted);">${l.spoof_type !== 'none' ? '· ' + l.spoof_type : ''}</span>
+          </div>
+          <div class="ts">${formatTime(l.timestamp)}</div>
+        </div>
+      `).join('');
+    } catch(e) {}
+  }
+
+  // ─── LOGS ───
+  async function loadLogs() {
+    const tbody = document.getElementById('logsBody');
+    tbody.innerHTML = '<tr class="loading-row"><td colspan="7">Loading...</td></tr>';
+    try {
+      const logs = await api('/entry/logs?limit=50');
+      if (!logs.length) {
+        tbody.innerHTML = '<tr class="loading-row"><td colspan="7">No entries yet</td></tr>';
+        return;
+      }
+      tbody.innerHTML = logs.map(l => `
+        <tr>
+          <td class="ts">#${l.id}</td>
+          <td class="ts">${formatTime(l.timestamp)}</td>
+          <td>${l.visitor_id ?? '<span style="color:var(--text-muted)">—</span>'}</td>
+          <td>${l.resident_id ?? '<span style="color:var(--text-muted)">—</span>'}</td>
+          <td><span class="badge badge-${l.status}">${l.status}</span></td>
+          <td class="ts">${l.spoof_type}</td>
+          <td><span class="badge badge-${l.action_taken}">${l.action_taken}</span></td>
+        </tr>
+      `).join('');
+    } catch(e) {
+      toast('Failed to load logs', 'error');
+      tbody.innerHTML = '<tr class="loading-row"><td colspan="7">Failed to load</td></tr>';
+    }
+  }
+
+  // ─── RESIDENTS ───
+  async function loadResidents() {
+    const tbody = document.getElementById('residentsBody');
+    tbody.innerHTML = '<tr class="loading-row"><td colspan="6">Loading...</td></tr>';
+    try {
+      const res = await api('/residents');
+      if (!res.length) {
+        tbody.innerHTML = '<tr class="loading-row"><td colspan="6">No residents registered yet</td></tr>';
+        return;
+      }
+      tbody.innerHTML = res.map(r => `
+        <tr>
+          <td class="ts">#${r.id}</td>
+          <td><strong>${r.flat_number}</strong></td>
+          <td>${r.name}</td>
+          <td class="ts">${r.phone}</td>
+          <td class="ts">${r.email || '—'}</td>
+          <td class="ts">${formatTime(r.created_at)}</td>
+        </tr>
+      `).join('');
+    } catch(e) {
+      toast('Failed to load residents', 'error');
+    }
+  }
+
+  async function addResident() {
+    const flat = document.getElementById('r_flat').value.trim();
+    const name = document.getElementById('r_name').value.trim();
+    const phone = document.getElementById('r_phone').value.trim();
+    const email = document.getElementById('r_email').value.trim();
+    if (!flat || !name || !phone) return toast('Flat, name, phone are required!', 'error');
+    try {
+      await api('/residents', { method: 'POST', body: JSON.stringify({ flat_number: flat, name, phone, email: email || null }) });
+      toast(`Resident ${name} added!`);
+      document.getElementById('r_flat').value = '';
+      document.getElementById('r_name').value = '';
+      document.getElementById('r_phone').value = '';
+      document.getElementById('r_email').value = '';
+      loadResidents();
+    } catch(e) {
+      toast(e.message, 'error');
+    }
+  }
+
+  // ─── VISITORS ───
+  async function loadVisitors() {
+    const tbody = document.getElementById('visitorsBody');
+    tbody.innerHTML = '<tr class="loading-row"><td colspan="6">Loading...</td></tr>';
+    try {
+      const res = await api('/visitors');
+      if (!res.length) {
+        tbody.innerHTML = '<tr class="loading-row"><td colspan="6">No visitors registered yet</td></tr>';
+        return;
+      }
+      tbody.innerHTML = res.map(v => `
+        <tr>
+          <td class="ts">#${v.id}</td>
+          <td>${v.name}</td>
+          <td class="ts">${v.phone || '—'}</td>
+          <td>${v.registered_by ?? '—'}</td>
+          <td>${v.photo_path ? `<span style="color:var(--verified); font-size:0.75rem;">✅ uploaded</span>` : '<span style="color:var(--text-muted); font-size:0.75rem;">none</span>'}</td>
+          <td class="ts">${formatTime(v.created_at)}</td>
+        </tr>
+      `).join('');
+    } catch(e) {
+      toast('Failed to load visitors', 'error');
+    }
+  }
+
+  async function addVisitor() {
+    const name = document.getElementById('v_name').value.trim();
+    const phone = document.getElementById('v_phone').value.trim();
+    const rid = document.getElementById('v_resident').value.trim();
+    if (!name) return toast('Name is required!', 'error');
+    try {
+      await api('/visitors', { method: 'POST', body: JSON.stringify({ name, phone: phone || null, registered_by: rid ? parseInt(rid) : null }) });
+      toast(`Visitor ${name} registered!`);
+      document.getElementById('v_name').value = '';
+      document.getElementById('v_phone').value = '';
+      document.getElementById('v_resident').value = '';
+      loadVisitors();
+    } catch(e) {
+      toast(e.message, 'error');
+    }
+  }
+
+  // ─── ALERTS ───
+  async function loadAlerts() {
+    const rid = document.getElementById('alert_resident_id').value.trim();
+    if (!rid) return toast('Enter resident ID', 'error');
+    document.getElementById('alertsList').innerHTML = '<div class="empty-state"><div class="icon">⏳</div>Loading...</div>';
+    try {
+      const alerts = await api(`/alerts/${rid}`);
+      if (!alerts.length) {
+        document.getElementById('alertsList').innerHTML = '<div class="empty-state"><div class="icon">✅</div>No alerts for this resident</div>';
+        return;
+      }
+      document.getElementById('alertsList').innerHTML = alerts.map(a => `
+        <div class="alert-item ${a.is_read ? 'read' : ''} ${a.message.includes('Unknown') ? 'info' : ''}">
+          <div>
+            <div class="alert-msg">${a.message}</div>
+            <div class="alert-time">${formatTime(a.sent_at)}</div>
+          </div>
+          ${!a.is_read ? `<button class="btn btn-ghost" style="font-size:0.75rem; padding:6px 12px;" onclick="markRead(${a.id}, this)">Mark Read</button>` : '<span style="font-size:0.75rem; color:var(--text-muted);">read</span>'}
+        </div>
+      `).join('');
+    } catch(e) {
+      toast('Failed to load alerts', 'error');
+    }
+  }
+
+  async function markRead(alertId, btn) {
+    try {
+      await api(`/alerts/${alertId}/read`, { method: 'PATCH' });
+      btn.closest('.alert-item').classList.add('read');
+      btn.remove();
+      toast('Alert marked as read');
+    } catch(e) {
+      toast(e.message, 'error');
+    }
+  }
+
+  // ─── SIMULATE ───
+  async function simulateEntry() {
+    const payload = {
+      visitor_id: document.getElementById('sim_visitor').value ? parseInt(document.getElementById('sim_visitor').value) : null,
+      resident_id: document.getElementById('sim_resident').value ? parseInt(document.getElementById('sim_resident').value) : null,
+      status: document.getElementById('sim_status').value,
+      spoof_type: document.getElementById('sim_spoof').value,
+      snapshot_path: document.getElementById('sim_snapshot').value || null,
+    };
+
+    document.getElementById('sim_result').innerHTML = '';
+
+    try {
+      const result = await api('/entry', { method: 'POST', body: JSON.stringify(payload) });
+      const color = payload.status === 'verified' ? 'var(--verified)' : payload.status === 'fake' ? 'var(--fake)' : 'var(--unknown)';
+      document.getElementById('sim_result').innerHTML = `
+        <div class="card" style="border-color:${color}; margin-top:1rem;">
+          <div class="card-title">📨 Response from /entry</div>
+          <pre style="font-family:'JetBrains Mono',monospace; font-size:0.8rem; color:${color}; line-height:1.8;">
+Log ID    : #${result.log_id}
+Action    : ${result.action.toUpperCase()}
+Status    : ${payload.status}
+Spoof     : ${payload.spoof_type}
+          </pre>
+        </div>
+      `;
+      toast(`Entry logged — action: ${result.action}`);
+    } catch(e) {
+      toast(e.message, 'error');
+    }
+  }
+
+  async function quickTest() {
+    const tests = [
+      { status: 'verified', spoof_type: 'none', visitor_id: null, resident_id: 1, snapshot_path: null },
+      { status: 'fake', spoof_type: 'photo', visitor_id: null, resident_id: 1, snapshot_path: 'snapshots/test_fake.jpg' },
+      { status: 'unknown', spoof_type: 'none', visitor_id: null, resident_id: 1, snapshot_path: null },
+    ];
+
+    let results = [];
+    for (const t of tests) {
+      try {
+        const r = await api('/entry', { method: 'POST', body: JSON.stringify(t) });
+        results.push({ ...t, ...r });
+      } catch(e) {
+        results.push({ ...t, error: e.message });
+      }
+    }
+
+    document.getElementById('sim_result').innerHTML = `
+      <div class="card" style="margin-top:1rem;">
+        <div class="card-title">⚡ Quick Test Results</div>
+        <table style="width:100%; border-collapse:collapse;">
+          <thead>
+            <tr>
+              <th style="text-align:left; padding:8px; font-family:'JetBrains Mono',monospace; font-size:0.7rem; color:var(--text-muted);">Status</th>
+              <th style="text-align:left; padding:8px; font-family:'JetBrains Mono',monospace; font-size:0.7rem; color:var(--text-muted);">Log ID</th>
+              <th style="text-align:left; padding:8px; font-family:'JetBrains Mono',monospace; font-size:0.7rem; color:var(--text-muted);">Action</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${results.map(r => `<tr>
+              <td style="padding:8px;"><span class="badge badge-${r.status}">${r.status}</span></td>
+              <td style="padding:8px;" class="ts">#${r.log_id ?? '—'}</td>
+              <td style="padding:8px;"><span class="badge badge-${r.action ?? 'denied'}">${r.action ?? r.error}</span></td>
+            </tr>`).join('')}
+          </tbody>
+        </table>
+      </div>
+    `;
+    toast('Quick test done! Check logs tab.');
+  }
+
+  // ─── SETTINGS ───
+  function saveSettings() {
+    const url = document.getElementById('setting_api_url').value.trim().replace(/\/$/, '');
+    API = url;
+    localStorage.setItem('sg_api_url', url);
+    document.getElementById('apiUrlDisplay').textContent = url.replace('http://','').replace('https://','');
+    toast('API URL saved!');
+    checkConnection();
+  }
+
+  async function testConnection() {
+    try {
+      const data = await api('/stats');
+      toast(`Connected! ${data.total_entries} total entries in DB.`);
+    } catch(e) {
+      toast('Cannot reach backend. Make sure server is running!', 'error');
+    }
+  }
+
+  function openSwagger() {
+    window.open(getAPI() + '/docs', '_blank');
+  }
+
+  // ─── HELPERS ───
+  function formatTime(ts) {
+    if (!ts) return '—';
+    try {
+      return new Date(ts + (ts.includes('T') ? '' : 'Z')).toLocaleString('en-IN', { 
+        day:'2-digit', month:'short', hour:'2-digit', minute:'2-digit', hour12: true 
+      });
+    } catch { return ts; }
+  }
+
+  // ─── INIT ───
+  checkConnection();
+  loadStats();
+  loadRecentActivity();
+
+  // Auto refresh every 30s when on dashboard
+  setInterval(() => {
+    const dashActive = document.getElementById('page-dashboard').classList.contains('active');
+    if (dashActive) { loadStats(); loadRecentActivity(); }
+  }, 30000);
+</script>
+</body>
+</html>
