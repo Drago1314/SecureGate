@@ -56,13 +56,13 @@ The backend exposes several RESTful endpoints. View the complete Swagger documen
 The AI module calls this endpoint to log facial recognition results.
 
 - POST /entry\
-  {\
-  `    "visitor\_id": 3,\
+ ` {\
+       "visitor\_id": 3,\
        "resident\_id": 1,\
        "status": "fake", \
        "spoof\_type": "photo", \
-       "snapshot\_path": "snapshots/frame\_xyz.jpg"`\
-  }\
+       "snapshot\_path": "snapshots/frame\_xyz.jpg"\
+  }`\
 \
   *Status Enum:* verified | fake | unknown\
   *Spoof Enum:* photo | video | mask | none
