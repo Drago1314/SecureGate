@@ -57,11 +57,11 @@ The AI module calls this endpoint to log facial recognition results.
 
 - POST /entry\
  ` {\
-       "visitor\_id": 3,\
-       "resident\_id": 1,\
-       "status": "fake", \
-       "spoof\_type": "photo", \
-       "snapshot\_path": "snapshots/frame\_xyz.jpg"\
+     `  "visitor\_id": 3,`\
+     `  "resident\_id": 1,`\
+     `  "status": "fake",`\
+     `  "spoof\_type": "photo",`\
+     `  "snapshot\_path": "snapshots/frame\_xyz.jpg"`\
   }`\
 \
   *Status Enum:* verified | fake | unknown\
